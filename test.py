@@ -3,6 +3,7 @@ import random
 import numpy as np
 import matplotlib.tri as tri
 from matplotlib import pyplot as plt 
+from functools import cmp_to_key
 
 MAX_DISTORTION = 1.5
 AREA_LENGTH_RATIO = 0.0
@@ -67,17 +68,61 @@ def circle_cross(p1, r1, p2, r2):
     else:
         return p4
     
-def plot_triangle(id, f, position_2D, color='blue'):
+def plot_triangle(id, f, position_2D, ori, color='blue'):
     p1 = position_2D[f[id][0]]
     p2 = position_2D[f[id][1]]
     p3 = position_2D[f[id][2]]
+    if all(p1 == p2) or all(p1 == p3) or all(p2 == p3):
+        return
     # print(p1)
     # print(p2)
     # print(p3)
 
-    rand_data = np.array([[p1[0], p1[1]], [p2[0], p2[1]], [p3[0], p3[1]]])
+    rand_data = np.array([[p1[0]+ori[0], p1[1]+ori[1]], [p2[0]+ori[0], p2[1]+ori[1]], [p3[0]+ori[0], p3[1]+ori[1]]])
     triangulation = tri.Triangulation(rand_data[:,0], rand_data[:,1])
     plt.triplot(triangulation, color='blue')
+
+
+def polt_texture(texture, f, position_2D):
+    l = []
+    for i,tex in enumerate(texture):
+        Mx = -1
+        mx = 1
+        My = -1
+        my = 1
+        for t in tex:
+            for j in f[t]:
+                if position_2D[i][j][0] > Mx:
+                    Mx = position_2D[i][j][0]
+                if position_2D[i][j][0] < mx:
+                    mx = position_2D[i][j][0]
+                if position_2D[i][j][1] > My:
+                    My = position_2D[i][j][1]
+                if position_2D[i][j][1] < my:
+                    my = position_2D[i][j][1]
+        l.append([i, max(Mx,-mx),max(My,-my)])
+    l.sort(key=cmp_to_key(lambda a,b:b[2]-a[2]))
+
+    cur_x = 0
+    cur_y = 0
+    next_y = 0
+    next_x = 0
+    for i in range(len(l)):
+        print(l[i][0])
+        if i % int(math.sqrt(len(l))) == 0:
+            cur_y += next_y + l[i][2]
+            next_y = l[i][2]
+            cur_x = 0
+            next_x = 0
+        cur_x += next_x + l[i][1]
+        next_x = l[i][1]
+        for id in texture[l[i][0]]:
+            plot_triangle(id, f, position_2D[l[i][0]], [cur_x, cur_y])
+
+                
+    # texture.sort(key=cmp_to_key(lambda a,b:len(b) - len(a)))
+    # print(texture)
+
 
 def triangle_area(p1, p2, p3):
     return abs(((p2[0]-p1[0])*(p3[1]-p1[1])-(p3[0]-p1[0])*(p2[1]-p1[1]))/2)
@@ -168,17 +213,18 @@ def calculate_position(id, v, f, position_2D):
 def insertion():
     return False
 
-def chart_growth(seed_id, v, f, ori, vis, vertex_dic, edge_dic):
+def chart_growth(seed_id, v, f, vis, vertex_dic, edge_dic, texture):
     fronts = set([])
     position_2D = {}
     # put the seed triangle
     vis[seed_id] = 1
     add_front(seed_id, vis, f, fronts, edge_dic)
-    position_2D[f[seed_id][0]] = np.zeros(2) + ori
-    position_2D[f[seed_id][1]] = np.array([0, np.linalg.norm(v[f[seed_id][0]]-v[f[seed_id][1]])]) + ori
+    position_2D[f[seed_id][0]] = np.zeros(2)
+    position_2D[f[seed_id][1]] = np.array([0, np.linalg.norm(v[f[seed_id][0]]-v[f[seed_id][1]])])
     calculate_position(seed_id, v, f, position_2D)
-    if seed_id <= 10:
-        plot_triangle(seed_id, f, position_2D)
+    # if seed_id <= 10:
+    #     plot_triangle(seed_id, f, position_2D)
+    texture[-1].append(seed_id)
     chart_area = triangle_area(position_2D[f[seed_id][0]], position_2D[f[seed_id][1]], position_2D[f[seed_id][2]])
     boundary_length = 0
     for i in range(3):
@@ -198,8 +244,9 @@ def chart_growth(seed_id, v, f, ori, vis, vertex_dic, edge_dic):
                 # print(ratio)
                 vis[id] = 1
                 add_list.append(id)
-                if seed_id <= 10:
-                    plot_triangle(id, f, position_2D)
+                # if seed_id <= 10:
+                #     plot_triangle(id, f, position_2D)
+                texture[-1].append(id)
                 chart_area += new_area
                 boundary_length += new_length
                 flag = False
@@ -209,18 +256,23 @@ def chart_growth(seed_id, v, f, ori, vis, vertex_dic, edge_dic):
         cnt += 1
         # if cnt == 1000:
         #     break
+    return position_2D
 
 def mesh_parameterization(v, f):
+    texture = []
+    position_2D = []
     vis = np.zeros(len(f))
     vertex_dic, edge_dic = creat_dictionary(v, f)
     cnt = 0
     for i in range(len(f)):
         if vis[i] == 0:
             print(i)
-            chart_growth(i, v, f, np.array([cnt*4, 0]), vis, vertex_dic, edge_dic)
+            texture.append([])
+            position_2D.append(chart_growth(i, v, f, vis, vertex_dic, edge_dic, texture))
             cnt += 1
             # if cnt == 2:
             #     break
+    polt_texture(texture, f, position_2D)
         
 
     
