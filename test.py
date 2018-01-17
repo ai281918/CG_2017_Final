@@ -100,21 +100,21 @@ def polt_texture(texture, f, position_2D):
                     My = position_2D[i][j][1]
                 if position_2D[i][j][1] < my:
                     my = position_2D[i][j][1]
-        l.append([i, max(Mx,-mx),max(My,-my)])
-    l.sort(key=cmp_to_key(lambda a,b:b[2]-a[2]))
+        l.append([i, Mx,-mx,My,-my])
+    l.sort(key=cmp_to_key(lambda a,b:(b[3]+b[4])-(a[3]+a[4])))
 
     cur_x = 0
     cur_y = 0
     next_y = 0
     next_x = 0
     for i in range(len(l)):
-        print(l[i][0])
+        # print(l[i])
         if i % int(math.sqrt(len(l))) == 0:
-            cur_y += next_y + l[i][2]
-            next_y = l[i][2]
+            cur_y += next_y + l[i][4]
+            next_y = l[i][3]
             cur_x = 0
             next_x = 0
-        cur_x += next_x + l[i][1]
+        cur_x += next_x + l[i][2]
         next_x = l[i][1]
         for id in texture[l[i][0]]:
             plot_triangle(id, f, position_2D[l[i][0]], [cur_x, cur_y])
@@ -277,7 +277,7 @@ def mesh_parameterization(v, f):
 
     
 
-v, f = read_obj('QQ.obj')
+v, f = read_obj('wood_logs.obj')
 print('Triangle num : ' + str(len(f)))
 # print(len(f))
 mesh_parameterization(v, f)
