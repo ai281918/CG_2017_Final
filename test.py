@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.tri as tri
 from matplotlib import pyplot as plt 
 
-MAX_DISTORTION = 2
+MAX_DISTORTION = 1.5
+AREA_LENGTH_RATIO = 0.0
 
 def read_obj(path):
     v = []
@@ -79,7 +80,21 @@ def plot_triangle(id, f, position_2D, color='blue'):
     plt.triplot(triangulation, color='blue')
 
 def triangle_area(p1, p2, p3):
-    return ((p2[0]-p1[0])*(p3[1]-p1[1])-(p3[0]-p1[0])*(p2[1]-p1[1]))/2
+    return abs(((p2[0]-p1[0])*(p3[1]-p1[1])-(p3[0]-p1[0])*(p2[1]-p1[1]))/2)
+
+def length_area_ratio(chart_area, boundary_length, front, id, f, position_2D):
+    front = front.split('_')
+    new_area = 0
+    new_area = triangle_area(position_2D[f[id][0]], position_2D[f[id][1]], position_2D[f[id][2]])
+    new_length = 1
+    for i in range(3):
+        # print(str(f[id][i]) + " " + str(f[id][(i+1)%3]))
+        new_length += np.linalg.norm(position_2D[f[id][i]] - position_2D[f[id][(i+1)%3]])
+    # print(front)
+    new_length -= np.linalg.norm(position_2D[int(front[0])] - position_2D[int(front[1])]) * 2
+
+    # print(str(new_area) + ' ' + str(new_length))
+    return (chart_area + new_area) / (boundary_length + new_length), new_area, new_length
 
 def distortiom_metric(id, v, f, position_2D):
     p1 = position_2D[f[id][0]]
@@ -108,9 +123,10 @@ def distortiom_metric(id, v, f, position_2D):
     # print('b : ' + str(b))
     # print('c : ' + str(c))
     Gmax = math.sqrt(((a+c)+math.sqrt((a-c)*(a-c)+4*b*b))/2)
-    Gmin = math.sqrt(((a+c)-math.sqrt((a-c)*(a-c)+4*b*b))/2)
-    if Gmin < 1e-8:
+    t = ((a+c)-math.sqrt((a-c)*(a-c)+4*b*b))/2
+    if t <= 0:
         return 99999
+    Gmin = math.sqrt(t)
     return max(Gmax, 1 / Gmin)
 
 def creat_dictionary(v, f):
@@ -161,18 +177,33 @@ def chart_growth(seed_id, v, f, ori, vis, vertex_dic, edge_dic):
     position_2D[f[seed_id][0]] = np.zeros(2) + ori
     position_2D[f[seed_id][1]] = np.array([0, np.linalg.norm(v[f[seed_id][0]]-v[f[seed_id][1]])]) + ori
     calculate_position(seed_id, v, f, position_2D)
+    # if seed_id == 0:
     plot_triangle(seed_id, f, position_2D)
+    chart_area = triangle_area(position_2D[f[seed_id][0]], position_2D[f[seed_id][1]], position_2D[f[seed_id][2]])
+    boundary_length = 0
+    for i in range(3):
+        boundary_length += np.linalg.norm(position_2D[f[seed_id][i]] - position_2D[f[seed_id][(i+1)%3]])
     # return
     cnt = 1
     while len(front) != 0:
+        flag = True
         for i in range(len(front)):
             id = edge_dic[front[i]][0]
             calculate_position(id, v, f, position_2D)
-            if vis[id] == 0 and distortiom_metric(id, v, f, position_2D) < MAX_DISTORTION and not insertion():
+            ratio, new_area, new_length = length_area_ratio(chart_area, boundary_length, front[i], id, f, position_2D)
+            if vis[id] == 0 and distortiom_metric(id, v, f, position_2D) < MAX_DISTORTION and ratio > AREA_LENGTH_RATIO and not insertion():
+                # print(chart_area, boundary_length)
+                # print(ratio)
                 vis[id] = 1
                 add_front(id, vis, f, front, edge_dic)
+                # if seed_id == 0:
                 plot_triangle(id, f, position_2D)
+                chart_area += new_area
+                boundary_length += new_length
+                flag = False
                 break
+        if flag:
+            return
         front.remove(front[i])
         cnt += 1
         # if cnt == 1000:
@@ -185,7 +216,7 @@ def mesh_parameterization(v, f):
     for i in range(len(f)):
         if vis[i] == 0:
             print(i)
-            chart_growth(i, v, f, np.array([cnt*5, 0]), vis, vertex_dic, edge_dic)
+            chart_growth(i, v, f, np.array([cnt*3, 0]), vis, vertex_dic, edge_dic)
             cnt += 1
             # if cnt == 2:
             #     break
