@@ -146,11 +146,11 @@ def creat_dictionary(v, f):
             # print(edge_dic[edge])
     return vertex_dic, edge_dic
             
-def add_front(id, vis, f, front, edge_dic):
+def add_front(id, vis, f, fronts, edge_dic):
     for i in range(3):
         edge = str(f[id][(i-1+3)%3]) + '_' + str(f[id][(i-2+3)%3])
         if edge in edge_dic and vis[edge_dic[edge][0]] == 0:
-            front.append(edge)
+            fronts.add(edge)
 
 def calculate_position(id, v, f, position_2D):
     for i in range(3):
@@ -169,42 +169,43 @@ def insertion():
     return False
 
 def chart_growth(seed_id, v, f, ori, vis, vertex_dic, edge_dic):
-    front = []
+    fronts = set([])
     position_2D = {}
     # put the seed triangle
     vis[seed_id] = 1
-    add_front(seed_id, vis, f, front, edge_dic)
+    add_front(seed_id, vis, f, fronts, edge_dic)
     position_2D[f[seed_id][0]] = np.zeros(2) + ori
     position_2D[f[seed_id][1]] = np.array([0, np.linalg.norm(v[f[seed_id][0]]-v[f[seed_id][1]])]) + ori
     calculate_position(seed_id, v, f, position_2D)
-    # if seed_id == 0:
-    plot_triangle(seed_id, f, position_2D)
+    if seed_id <= 10:
+        plot_triangle(seed_id, f, position_2D)
     chart_area = triangle_area(position_2D[f[seed_id][0]], position_2D[f[seed_id][1]], position_2D[f[seed_id][2]])
     boundary_length = 0
     for i in range(3):
         boundary_length += np.linalg.norm(position_2D[f[seed_id][i]] - position_2D[f[seed_id][(i+1)%3]])
     # return
     cnt = 1
-    while len(front) != 0:
+    while len(fronts) != 0:
+        # print(len(fronts))
         flag = True
-        for i in range(len(front)):
-            id = edge_dic[front[i]][0]
+        add_list = []
+        for front in fronts:
+            id = edge_dic[front][0]
             calculate_position(id, v, f, position_2D)
-            ratio, new_area, new_length = length_area_ratio(chart_area, boundary_length, front[i], id, f, position_2D)
+            ratio, new_area, new_length = length_area_ratio(chart_area, boundary_length, front, id, f, position_2D)
             if vis[id] == 0 and distortiom_metric(id, v, f, position_2D) < MAX_DISTORTION and ratio > AREA_LENGTH_RATIO and not insertion():
                 # print(chart_area, boundary_length)
                 # print(ratio)
                 vis[id] = 1
-                add_front(id, vis, f, front, edge_dic)
-                # if seed_id == 0:
-                plot_triangle(id, f, position_2D)
+                add_list.append(id)
+                if seed_id <= 10:
+                    plot_triangle(id, f, position_2D)
                 chart_area += new_area
                 boundary_length += new_length
                 flag = False
-                break
-        if flag:
-            return
-        front.remove(front[i])
+        fronts = set([])
+        for x in add_list:
+            add_front(x, vis, f, fronts, edge_dic)
         cnt += 1
         # if cnt == 1000:
         #     break
@@ -216,7 +217,7 @@ def mesh_parameterization(v, f):
     for i in range(len(f)):
         if vis[i] == 0:
             print(i)
-            chart_growth(i, v, f, np.array([cnt*3, 0]), vis, vertex_dic, edge_dic)
+            chart_growth(i, v, f, np.array([cnt*4, 0]), vis, vertex_dic, edge_dic)
             cnt += 1
             # if cnt == 2:
             #     break
@@ -224,7 +225,7 @@ def mesh_parameterization(v, f):
 
     
 
-v, f = read_obj('sphere.obj')
+v, f = read_obj('QQ.obj')
 print('Triangle num : ' + str(len(f)))
 # print(len(f))
 mesh_parameterization(v, f)
