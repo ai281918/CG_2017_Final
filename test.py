@@ -72,14 +72,28 @@ def plot_triangle(id, f, position_2D, ori, color='blue'):
     p1 = position_2D[f[id][0]]
     p2 = position_2D[f[id][1]]
     p3 = position_2D[f[id][2]]
-    if all(p1 == p2) or all(p1 == p3) or all(p2 == p3):
+    flag1 = True
+    flag2 = True
+    for i in range(3):
+        a = abs(position_2D[f[id][i]][0] - position_2D[f[id][(i+1)%3]][0])
+        b = abs(position_2D[f[id][i]][1] - position_2D[f[id][(i+1)%3]][1])
+        if a > 1e-3:
+            flag1 = False
+        if b > 1e-3:
+            flag2 = False
+        if a < 1e-3 and b < 1e-3:
+            return
+        
+    if flag1 or flag2:
         return
     # print(p1)
     # print(p2)
     # print(p3)
 
     rand_data = np.array([[p1[0]+ori[0], p1[1]+ori[1]], [p2[0]+ori[0], p2[1]+ori[1]], [p3[0]+ori[0], p3[1]+ori[1]]])
+    # print(rand_data)
     triangulation = tri.Triangulation(rand_data[:,0], rand_data[:,1])
+    plt.axis('equal')
     plt.triplot(triangulation, color='blue')
 
 
@@ -111,13 +125,14 @@ def polt_texture(texture, f, position_2D):
         # print(l[i])
         if i % int(math.sqrt(len(l))) == 0:
             cur_y += next_y + l[i][4]
-            next_y = l[i][3]
+            next_y = l[i][3] + 0.1
             cur_x = 0
             next_x = 0
         cur_x += next_x + l[i][2]
-        next_x = l[i][1]
+        next_x = l[i][1] + 0.1
         for id in texture[l[i][0]]:
             plot_triangle(id, f, position_2D[l[i][0]], [cur_x, cur_y])
+            # print(distortiom_metric(id, v, f, position_2D[l[i][0]]))
 
                 
     # texture.sort(key=cmp_to_key(lambda a,b:len(b) - len(a)))
@@ -125,11 +140,10 @@ def polt_texture(texture, f, position_2D):
 
 
 def triangle_area(p1, p2, p3):
-    return abs(((p2[0]-p1[0])*(p3[1]-p1[1])-(p3[0]-p1[0])*(p2[1]-p1[1]))/2)
+    return max(abs(((p2[0]-p1[0])*(p3[1]-p1[1])-(p3[0]-p1[0])*(p2[1]-p1[1]))/2), 1e-8)
 
 def length_area_ratio(chart_area, boundary_length, front, id, f, position_2D):
     front = front.split('_')
-    new_area = 0
     new_area = triangle_area(position_2D[f[id][0]], position_2D[f[id][1]], position_2D[f[id][2]])
     new_length = 1
     for i in range(3):
@@ -197,21 +211,37 @@ def add_front(id, vis, f, fronts, edge_dic):
         if edge in edge_dic and vis[edge_dic[edge][0]] == 0:
             fronts.add(edge)
 
-def calculate_position(id, v, f, position_2D):
-    for i in range(3):
-        if f[id][i] not in position_2D:
-            # print('Q1 : ' + str(v[f[id][(i+1)%3]]))
-            # print('Q2 : ' + str(v[f[id][(i+2)%3]]))
-            # print('Q3 : ' + str(v[f[id][i]]))
-            # print('R1 : ' + str(np.linalg.norm(v[f[id][i]]-v[f[id][(i+1)%3]])))
-            # print('R2 : ' + str(np.linalg.norm(v[f[id][i]]-v[f[id][(i+2)%3]])))
-            position_2D[f[id][i]] = circle_cross(position_2D[f[id][(i+1)%3]], np.linalg.norm(v[f[id][i]]-v[f[id][(i+1)%3]]), position_2D[f[id][(i+2)%3]], np.linalg.norm(v[f[id][i]]-v[f[id][(i+2)%3]]))
-            # print('P1 : ' + str(position_2D[f[id][(i+1)%3]]))
-            # print('P2 : ' + str(position_2D[f[id][(i+2)%3]]))
-            # print('P3 : ' + str(position_2D[f[id][i]]))
+def calculate_position(vertex_id, vertex_dic, v, f, fronts, position_2D, vis):
+    tmp_list = []
+    distortion_sum = 0
+    for x in vertex_dic[vertex_id]:
+        edge = str(x[1]) + '_' + str(x[2])
+        if edge in fronts:
+            position_2D[vertex_id] = circle_cross(position_2D[x[1]], np.linalg.norm(v[vertex_id]-v[x[1]]), position_2D[x[2]], np.linalg.norm(v[vertex_id]-v[x[2]]))
+            d = distortiom_metric(x[0], v, f, position_2D)
+            distortion_sum += d
+            tmp_list.append([position_2D[vertex_id], d])
+    
+    position_2D[vertex_id] = np.zeros(2)
+    for x in tmp_list:
+        position_2D[vertex_id] += x[0] * x[1] / distortion_sum
+    if len(tmp_list) > 0:
+        position_2D[vertex_id] = tmp_list[0][0]
+
+def check_distortion(vertex_id, vertex_dic, v, f, fronts, position_2D, vis):
+    for x in vertex_dic[vertex_id]:
+        edge = str(x[1]) + '_' + str(x[2])
+        if vis[x[0]] == 0 and edge in fronts:
+            if distortiom_metric(x[0], v, f, position_2D) > MAX_DISTORTION:
+                return False
+    return True
 
 def insertion():
     return False
+
+def add_vertex_to_chart(vertex_id, add_list, vertex_dic, fronts, texture):
+    pass
+
 
 def chart_growth(seed_id, v, f, vis, vertex_dic, edge_dic, texture):
     fronts = set([])
@@ -221,41 +251,40 @@ def chart_growth(seed_id, v, f, vis, vertex_dic, edge_dic, texture):
     add_front(seed_id, vis, f, fronts, edge_dic)
     position_2D[f[seed_id][0]] = np.zeros(2)
     position_2D[f[seed_id][1]] = np.array([0, np.linalg.norm(v[f[seed_id][0]]-v[f[seed_id][1]])])
-    calculate_position(seed_id, v, f, position_2D)
-    # if seed_id <= 10:
-    #     plot_triangle(seed_id, f, position_2D)
+    position_2D[f[seed_id][2]] = circle_cross(position_2D[f[seed_id][0]], np.linalg.norm(v[f[seed_id][2]]-v[f[seed_id][0]]), position_2D[f[seed_id][1]], np.linalg.norm(v[f[seed_id][2]]-v[f[seed_id][1]]))
     texture[-1].append(seed_id)
     chart_area = triangle_area(position_2D[f[seed_id][0]], position_2D[f[seed_id][1]], position_2D[f[seed_id][2]])
     boundary_length = 0
     for i in range(3):
         boundary_length += np.linalg.norm(position_2D[f[seed_id][i]] - position_2D[f[seed_id][(i+1)%3]])
-    # return
-    cnt = 1
+    # add vertex
     while len(fronts) != 0:
         # print(len(fronts))
-        flag = True
         add_list = []
         for front in fronts:
-            id = edge_dic[front][0]
-            calculate_position(id, v, f, position_2D)
-            ratio, new_area, new_length = length_area_ratio(chart_area, boundary_length, front, id, f, position_2D)
-            if vis[id] == 0 and distortiom_metric(id, v, f, position_2D) < MAX_DISTORTION and ratio > AREA_LENGTH_RATIO and not insertion():
-                # print(chart_area, boundary_length)
-                # print(ratio)
-                vis[id] = 1
-                add_list.append(id)
-                # if seed_id <= 10:
-                #     plot_triangle(id, f, position_2D)
-                texture[-1].append(id)
+            tri_id = edge_dic[front][0]
+            vertex_id = edge_dic[front][1]
+            pop_flag = vertex_id not in position_2D
+            if pop_flag:
+                calculate_position(vertex_id, vertex_dic, v, f, fronts, position_2D, vis)
+            ratio, new_area, new_length = length_area_ratio(chart_area, boundary_length, front, tri_id, f, position_2D)
+            if vis[tri_id] == 0 and check_distortion(vertex_id, vertex_dic, v, f, fronts, position_2D, vis) and ratio > AREA_LENGTH_RATIO and not insertion():
+                for x in vertex_dic[vertex_id]:
+                    edge = str(x[1]) + '_' + str(x[2])
+                    if vis[x[0]] == 0 and edge in fronts:
+                        # print(x[0])
+                        vis[x[0]] = 1
+                        add_list.append(x[0])
+                        texture[-1].append(x[0])
                 chart_area += new_area
                 boundary_length += new_length
-                flag = False
+            elif pop_flag:
+                # pass
+                position_2D.pop(vertex_id, None)
         fronts = set([])
         for x in add_list:
             add_front(x, vis, f, fronts, edge_dic)
-        cnt += 1
-        # if cnt == 1000:
-        #     break
+    
     return position_2D
 
 def mesh_parameterization(v, f):
@@ -277,7 +306,7 @@ def mesh_parameterization(v, f):
 
     
 
-v, f = read_obj('wood_logs.obj')
+v, f = read_obj('sphere.obj')
 print('Triangle num : ' + str(len(f)))
 # print(len(f))
 mesh_parameterization(v, f)
