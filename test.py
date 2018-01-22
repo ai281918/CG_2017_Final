@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from functools import cmp_to_key
 
 MAX_DISTORTION = 1.5
-AREA_LENGTH_RATIO = 0.0
+AREA_LENGTH_RATIO = 0.002
 
 def read_obj(path):
     v = []
@@ -114,8 +114,9 @@ def polt_texture(texture, f, position_2D):
                     My = position_2D[i][j][1]
                 if position_2D[i][j][1] < my:
                     my = position_2D[i][j][1]
-        l.append([i, Mx,-mx,My,-my])
-    l.sort(key=cmp_to_key(lambda a,b:(b[3]+b[4])-(a[3]+a[4])))
+        print(Mx, mx, My, my)
+        l.append([i, max(Mx,-mx), max(My,-my)])
+    l.sort(key=cmp_to_key(lambda a,b:b[2]-a[2]))
 
     cur_x = 0
     cur_y = 0
@@ -124,11 +125,11 @@ def polt_texture(texture, f, position_2D):
     for i in range(len(l)):
         # print(l[i])
         if i % int(math.sqrt(len(l))) == 0:
-            cur_y += next_y + l[i][4]
-            next_y = l[i][3] + 0.1
+            cur_y += next_y + l[i][2]
+            next_y = l[i][2] + 0.1
             cur_x = 0
             next_x = 0
-        cur_x += next_x + l[i][2]
+        cur_x += next_x + l[i][1]
         next_x = l[i][1] + 0.1
         for id in texture[l[i][0]]:
             plot_triangle(id, f, position_2D[l[i][0]], [cur_x, cur_y])
@@ -164,7 +165,7 @@ def length_area_ratio(chart_area, boundary_length, vertex_id, fronts, vertex_dic
             edges_used.add((vertex_id, x[2]))
             edges_used.add((x[1], vertex_id))
 
-    return (chart_area + new_area) / (boundary_length + new_length), new_area, new_length
+    return (chart_area + new_area) / ((boundary_length + new_length)*(boundary_length + new_length)), new_area, new_length
 
 def distortion_metric(id, v, f, position_2D):
     p1 = position_2D[f[id][0]]
@@ -279,6 +280,7 @@ def chart_growth(seed_id, v, f, vis, vertex_dic, edge_dic, texture):
             if pop_flag:
                 calculate_position(vertex_id, vertex_dic, v, f, fronts, position_2D, vis)
             ratio, new_area, new_length = length_area_ratio(chart_area, boundary_length, vertex_id, fronts, vertex_dic, f, position_2D, vis)
+            # print(ratio)
             if vis[tri_id] == 0 and check_distortion(vertex_id, vertex_dic, v, f, fronts, position_2D, vis) and ratio > AREA_LENGTH_RATIO and not insertion():
                 for x in vertex_dic[vertex_id]:
                     edge = str(x[1]) + '_' + str(x[2])
